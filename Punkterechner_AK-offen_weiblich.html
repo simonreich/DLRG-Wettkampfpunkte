@@ -1,0 +1,369 @@
+<p id="formZeit"></p>
+
+<script type="text/javascript">
+
+var w = 760;
+var h = 400;
+var x = d3.scale.linear().domain([0, 400]).range([0,w]);
+var y = d3.scale.linear().domain([0, 3000]).range([h,0]);
+var pad = 75;
+var visGlobal = [];
+
+var rekorde = [
+    ["50retten", "50m Retten einer Puppe", "Laura Quilter", "32.79"],
+    ["100rettenflossen", "100m Retten einer Puppe mit Flossen", "Fabretti Lucrezia", "50.78"],
+    ["100rettengurt", "100m Retten mit Flossen und Gurtretter", "Volpini Federicia", "57.05"],
+    ["100kombi", "100m Kombinierte Rettungsübung", "Samantha Lee", "68.86"],
+    ["200super", "200m Super Lifesaver", "Prue Davis", "141.73"],
+    ["200hindernis", "200m Hindernis", "Ying Lu" ,"121.88"]];
+
+var format_2f = d3.format(".1f");
+
+main();
+
+function main() {
+  // create input form
+  inputForms();
+
+  // create graphs
+  rekorde.forEach(function (wettkampf, index) {
+    svgName = wettkampf[0] + 'SVG';
+
+    var svg = d3.select("body")
+        .append("svg:svg")
+        .attr("height", h + pad)
+        .attr("width",  w + pad);
+
+    var vis = svg.append(svgName + ':g')
+        .attr("transform", "translate(75,20)");
+    visGlobal.push(vis);
+
+    var continuous = make_graph(wettkampf[3]);
+
+    make_rules(svgName + ':g', vis);
+    make_title(svgName + ':g', vis, wettkampf[1], wettkampf[2], wettkampf[3]);
+    chart_line(svgName + ':g', vis, continuous);
+    chart_point_rekord(svgName + ':g', vis, wettkampf[3]);
+
+    var legend = d3.select("body").append("div")
+        .classed("legend", true)
+    make_mouseover_guides(svgName + ':g', vis, continuous, legend);
+  })
+}
+
+
+function inputForms() {
+  // Create text for form
+  var text = '<form name="myform" onSubmit="return handleClick()">';
+  rekorde.forEach(function (wettkampf, index) {
+    text = text.concat('Deine Zeit für ');
+    text = text.concat(wettkampf[1]);
+    text = text.concat(':<br>');
+    text = text.concat('<input type="text" id="');
+    text = text.concat(wettkampf[0]);
+    text = text.concat('" placeholder="Rekord: ');
+    text = text.concat(wettkampf[3]);
+    text = text.concat('", value=""> Sekunden<br><br>\n');
+  });
+  text = text.concat('<input name="Submit" type="submit" value="Eintragen"></form><br><br>');
+  document.getElementById("formZeit").innerHTML = text;
+}
+
+
+function handleClick(event){
+  // array for user times
+  zeiten = []
+  // Create text for form, with points
+  var text = '<form name="myform" onSubmit="return handleClick()">';
+  rekorde.forEach(function (wettkampf, index) {
+    currentTime = document.getElementById(wettkampf[0]).value;
+    if (currentTime == '') {
+      zeiten.push([wettkampf, -1, -1])
+    } else {
+      zeiten.push([wettkampf, currentTime, format_2f(getPoints(wettkampf[3], currentTime))])
+    }
+    text = text.concat('Deine Zeit für ');
+    text = text.concat(wettkampf[1]);
+    text = text.concat(':<br>');
+    text = text.concat('<input type="text" id="');
+    text = text.concat(wettkampf[0]);
+    text = text.concat('" placeholder="Rekord: ');
+    text = text.concat(wettkampf[3]);
+    text = text.concat('", value="');
+    if (currentTime != '') {
+      text = text.concat(currentTime);
+      text = text.concat('"> Sekunden, deine Punkte: ');
+      text = text.concat(format_2f(getPoints(wettkampf[3], currentTime)));
+    } else {
+      text = text.concat('"> Sekunden');
+    }
+    text = text.concat('<br><br>\n');
+  });
+  text = text.concat('<input name="Submit" type="submit" value="Eintragen"></form><br><br>');
+
+  // zeiten sortieren
+  zeiten.sort(function(x, y){
+    return x[2]-y[2]
+  })
+  zeiten.reverse();
+  text = text.concat('Deine Disziplinen nach Punkten sortiert:<br><ol>');
+  zeiten.forEach(function (zeit, index) {
+    if (zeit[1] != -1 && zeit[2] != -1) {
+      text = text.concat('<li>' + zeit[0][1] + ': ' + zeit[1] + 's und ' + format_2f(zeit[2]) + ' Punkte</li>');
+    }
+  });
+  text = text.concat('</ol><br>');
+
+  // compute total score
+  scoreCount = 0;
+  scoreTotal = 0;
+  zeiten.forEach(function (zeit, index) {
+    if (zeit[1] != -1 && zeit[2] != -1 && scoreCount < 4) {
+      scoreCount = Number(scoreCount) + Number(1);
+      scoreTotal = Number(scoreTotal) + Number(zeit[2]);
+    }
+  });
+  text = text.concat('Gesamtpunkte der ' + scoreCount + ' besten Disziplinen: ' + format_2f(scoreTotal) + ' Punkte.<br><br>');
+
+
+  document.getElementById("formZeit").innerHTML = text;
+
+  // Put points into graphs
+  rekorde.forEach(function (wettkampf, index) {
+    svgName = wettkampf[0] + 'SVG';
+    zeit = document.getElementById(wettkampf[0]).value
+    if (zeit != '') {
+      chart_point_user(svgName + ':g', visGlobal[index], wettkampf[3], zeit);
+    };
+  });
+
+  return false;
+}
+
+
+function getPoints(rekord, zeit) {
+  if (zeit < 2*rekord) {
+    return 467 * (zeit/rekord)*(zeit/rekord) - 2001 * (zeit/rekord) + 2534
+  } else if ((2000/3) - (400/3) * (zeit/rekord) > 0) {
+    return (2000/3) - (400/3) * (zeit/rekord)
+  } else {
+    return 0
+  }
+  return 0
+}
+
+
+function make_graph(rekord) {
+  return (function(xi) {
+    if (xi < 2*rekord) {
+      return 467 * (xi/rekord)*(xi/rekord) - 2001 * (xi/rekord) + 2534
+    } else if ((2000/3) - (400/3) * (xi/rekord) > 0) {
+      return (2000/3) - (400/3) * (xi/rekord)
+    } else {
+      return 0
+    }
+  });
+}
+
+
+function chart_line(nameSVG, vis, continuous) {
+  var g = vis.append(nameSVG)
+      .classed("series", true)
+
+  g.append("svg:path")
+      .attr("d", function(d) { return d3.svg.line()(
+        x.ticks(100).map(function(xi) {
+          return [ x(xi), y(continuous(xi)) ]
+        })
+       )})
+}
+
+function chart_point_rekord(nameSVG, vis, rekord) {
+  var g = vis.append(nameSVG)
+
+  var dataset = [
+      [x(rekord), y(getPoints(rekord, rekord)), "Rekord: " + rekord + "s"],
+      [x(2*rekord), y(getPoints(rekord, 2*rekord)), "2x Rekord: " + 2*rekord + "s"],
+      ];
+
+  g.selectAll("circle")
+      .data(dataset)
+      .enter()
+      .append("circle")
+      .attr("cx", function(d) { return d[0]; })
+      .attr("cy", function(d) { return d[1]; })
+      .attr("r", 5)
+      .attr("fill", "red");
+
+  g.selectAll("text")
+      .data(dataset)
+      .enter()
+      .append("text")
+      .attr("x", function(d) { return d[0]+10; })
+      .attr("y", function(d) { return d[1]-10; })
+      .attr("fill", "red")
+      .text(function(d) { return d[2]; })
+      .attr("font-family", "sans-serif")
+      .attr("font-size", "20px");
+}
+
+
+function chart_point_user(nameSVG, vis, rekord, zeit) {
+  var g = vis.append(nameSVG)
+
+  var dataset = [
+      [x(zeit), y(getPoints(rekord, zeit)), "Deine Zeit: " + zeit + "s, Punkte: " + format_2f(getPoints(rekord, zeit))],
+      ];
+
+  vis.selectAll("#chart_point_user_circle").remove();
+  vis.selectAll("#chart_point_user_text").remove();
+
+  g.selectAll("circle")
+      .data(dataset)
+      .enter()
+      .append("circle")
+      .attr("id", "chart_point_user_circle")
+      .attr("cx", function(d) { return d[0]; })
+      .attr("cy", function(d) { return d[1]; })
+      .attr("r", 5)
+      .attr("fill", "green");
+
+  g.selectAll("text")
+      .data(dataset)
+      .enter()
+      .append("text")
+      .attr("id", "chart_point_user_text")
+      .attr("x", function(d) { return d[0]+10; })
+      .attr("y", function(d) { return d[1]-10; })
+      .attr("fill", "green")
+      .text(function(d) { return d[2]; })
+      .attr("font-family", "sans-serif")
+      .attr("font-size", "20px");
+}
+
+
+function make_mouseover_guides(nameSVG, vis, continuous, legend) {
+  var guides = vis.append(nameSVG)
+      .classed("guides", true)
+  var y_guides = guides.append("svg:g")
+  guides.append("svg:line")
+      .attr("y1",h)
+  y_guides.append("svg:circle")
+      .attr("r",7)
+  y_guides.append("svg:line")
+      .attr("x1",-20)
+      .attr("x2",+10)
+
+  vis.append("svg:rect")
+      .classed("mouse_area", true)
+      .attr("width",  w)
+      .attr("height", h)
+      .on("mousemove", update_legend_values)
+      .on("mouseout", blank_legend_values)
+
+  blank_legend_values();
+
+  function update_legend_values() {
+    var xi = x.invert(d3.svg.mouse(this)[0]);
+
+    legend
+        .text("Zeit: "+format_2f(xi)+ " Sekunden | Punkte: "+format_2f(continuous(xi)))
+
+    guides
+        .attr("transform", "translate("+(x(xi))+",0)")
+        .attr("visibility", "visible")
+
+    y_guides
+        .attr("transform", "translate(0,"+y(continuous(xi))+")")
+  }
+
+  function blank_legend_values() {
+    legend
+        .text("Mouse over the graph...")
+
+    guides
+        .attr("visibility", "hidden")
+  }
+}
+
+
+function make_rules(nameSVG, vis) {
+  var rules = vis.append(nameSVG).classed("rules", true)
+
+  function make_x_axis() {
+    return d3.svg.axis()
+        .scale(x)
+        .orient("bottom")
+        .ticks(10)
+  }
+
+  function make_y_axis() {
+    return d3.svg.axis()
+        .scale(y)
+        .orient("left")
+        .ticks(10)
+  }
+
+  rules.append(nameSVG).classed("grid x_grid", true)
+      .attr("transform", "translate(0,"+h+")")
+      .call(make_x_axis()
+          .tickSize(-h,0,0)
+          .tickFormat("")
+      )
+
+  rules.append(nameSVG).classed("grid y_grid", true)
+      .call(make_y_axis()
+          .tickSize(-w,0,0)
+          .tickFormat("")
+      )
+
+  rules.append(nameSVG).classed("labels x_labels", true)
+      .attr("transform", "translate(0,"+h+")")
+      .call(make_x_axis()
+          .tickSize(5)
+      )
+
+  rules.append(nameSVG).classed("labels y_labels", true)
+      .call(make_y_axis()
+          .tickSubdivide(1)
+          .tickSize(10, 5, 0)
+      )
+
+  rules.append("text").classed("labels x_labels", true)
+      .attr("transform", "translate(" + (w/2) + " ," + (h + 35) + ")")
+      .style("text-anchor", "middle")
+      .text("Zeit [s]");
+
+  rules.append("text").classed("labels y_labels", true)
+      .attr("transform", "rotate(-90)")
+      .attr("y", -70)
+      .attr("x",0 - (h / 2))
+      .attr("dy", "1em")
+      .style("text-anchor", "middle")
+      .text("Punkte");
+}
+
+
+function make_title(nameSVG, vis, title, person, rekord) {
+  var g = vis.append(nameSVG);
+
+  var dataset = [
+      [w/2+50, 50, title, "black", "20px"],
+      [w/2+50, 75, "Rekord: " + rekord + "s von " + person, "gray", "15px"],
+      ];
+
+  g.selectAll("text")
+      .data(dataset)
+      .enter()
+      .append("text")
+      .attr("x", function(d) { return d[0]; })
+      .attr("y", function(d) { return d[1]; })
+      .attr("id", "chart_title")
+      .attr("fill", function(d) { return d[3]; })
+      .style("text-anchor", "middle")
+      .attr("font-family", "sans-serif")
+      .attr("font-size", function(d) { return d[4]; })
+      .text(function(d) { return d[2]; });
+}
+
+</script>
