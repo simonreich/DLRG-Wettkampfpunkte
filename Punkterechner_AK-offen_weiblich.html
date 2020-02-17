@@ -118,7 +118,7 @@ function handleClick(event){
   scoreCount = 0;
   scoreTotal = 0;
   zeiten.forEach(function (zeit, index) {
-    if (zeit[1] != -1 && zeit[2] != -1 && scoreCount < 4) {
+    if (zeit[1] != -1 && zeit[2] != -1 && scoreCount < 3) {
       scoreCount = Number(scoreCount) + Number(1);
       scoreTotal = Number(scoreTotal) + Number(zeit[2]);
     }
